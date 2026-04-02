@@ -1,0 +1,35 @@
+{
+  "name": "trello-mcp-server",
+  "version": "1.0.0",
+  "description": "Token-optimized Trello MCP server for Claude Code — compact responses, field-level filtering, and built-in caching",
+  "module": "index.ts",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DKeken/trello-mcp.git"
+  },
+  "keywords": [
+    "trello",
+    "mcp",
+    "claude",
+    "model-context-protocol",
+    "claude-code"
+  ],
+  "scripts": {
+    "start": "bun run index.ts",
+    "dev": "bun run --watch index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
