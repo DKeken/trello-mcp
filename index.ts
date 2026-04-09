@@ -9,14 +9,59 @@
  *  - Caches board structure (lists, labels) to avoid redundant calls
  */
 
+import { readFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
+const parseDotEnv = (content: string): Record<string, string> => {
+  const entries: Record<string, string> = {};
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex === -1) continue;
+
+    const key = line.slice(0, separatorIndex).trim();
+    const rawValue = line.slice(separatorIndex + 1).trim();
+    const value = rawValue.replace(/^['\"]|['\"]$/g, "");
+
+    if (key) {
+      entries[key] = value;
+    }
+  }
+
+  return entries;
+};
+
+const loadDotEnvFallback = (): Record<string, string> => {
+  const serverDir = dirname(fileURLToPath(import.meta.url));
+  const candidatePaths = [join(process.cwd(), ".env"), join(serverDir, ".env")];
+
+  for (const path of candidatePaths) {
+    if (!existsSync(path)) continue;
+
+    try {
+      return parseDotEnv(readFileSync(path, "utf8"));
+    } catch {
+      // Ignore invalid fallback files and continue to the next location.
+    }
+  }
+
+  return {};
+};
+
+const envFallback = loadDotEnvFallback();
+const readConfig = (key: string): string => process.env[key] ?? envFallback[key] ?? "";
+
 // ── Config ──────────────────────────────────────────────────────────
-const API_KEY = process.env.TRELLO_API_KEY ?? "";
-const TOKEN = process.env.TRELLO_TOKEN ?? "";
-const BOARD_ID = process.env.TRELLO_BOARD_ID ?? "";
+const API_KEY = readConfig("TRELLO_API_KEY");
+const TOKEN = readConfig("TRELLO_TOKEN");
+const BOARD_ID = readConfig("TRELLO_BOARD_ID");
 const BASE = "https://api.trello.com/1";
 const DESC_MAX = 300;
 
@@ -546,6 +591,42 @@ server.tool(
     if (!matches.length) return { content: [{ type: "text" as const, text: `No cards match "${query}"` }] };
     const lines = matches.map((c) => fmtCardCompact(c, listMap.get(c.idList) ?? "?"));
     return { content: [{ type: "text" as const, text: `Found ${matches.length} cards:\n${lines.join("\n")}` }] };
+  },
+);
+
+// ── read_comments ───────────────────────────────────────────────────
+server.tool(
+  "read_comments", "Get all comments from a card with full text and metadata.",
+  {
+    cardId: z.string().describe("Card ID (full or last 6 chars)"),
+    limit: z.number().optional().default(50).describe("Max comments to retrieve (default 50)"),
+    board: BOARD_ARG,
+  },
+  async ({ cardId, limit, board }) => {
+    const boardId = await resolveBoardId(board);
+    let fullId = cardId;
+    if (cardId.length < 24) {
+      const cards = await trello<TCard[]>("GET", `/boards/${boardId}/cards?fields=id`);
+      const match = cards.find((c) => c.id.endsWith(cardId));
+      if (!match) return { content: [{ type: "text" as const, text: `Card not found: ${cardId}` }] };
+      fullId = match.id;
+    }
+    const comments = await trello<TComment[]>("GET", `/cards/${fullId}/actions?filter=commentCard&limit=${limit}`);
+    if (!comments.length) {
+      return { content: [{ type: "text" as const, text: `No comments on card ${cardId.slice(-6)}` }] };
+    }
+    const lines = comments.map((c) => {
+      const author = c.memberCreator?.fullName ?? "Unknown";
+      const date = c.date.slice(0, 19).replace("T", " ");
+      const text = c.data.text ?? "";
+      return `[${date}] ${author}:\n${text}\n`;
+    });
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Comments on card ${cardId.slice(-6)} (${comments.length} total):\n\n${lines.join("\n")}`
+      }]
+    };
   },
 );
 

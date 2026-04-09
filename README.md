@@ -35,6 +35,19 @@ export TRELLO_TOKEN="your-token"
 export TRELLO_BOARD_ID="your-default-board-id"  # optional
 ```
 
+The server also supports a local `.env` fallback when these variables are not present in the process environment. It looks for `.env` in:
+
+1. the current working directory
+2. the `trello-mcp-server/` directory
+
+Example:
+
+```env
+TRELLO_API_KEY=your-api-key
+TRELLO_TOKEN=your-token
+TRELLO_BOARD_ID=your-default-board-id
+```
+
 ### 4. Add to Claude Code
 
 Add to your `~/.claude/settings.json` or project `.claude/settings.json`:
@@ -69,6 +82,7 @@ Add to your `~/.claude/settings.json` or project `.claude/settings.json`:
 | `update_card_details` | Update card name, description, due date, labels |
 | `archive_card` | Archive (soft-delete) a card |
 | `add_comment` | Add a comment to a card |
+| `read_comments` | Get all comments from a card with full text and metadata |
 | `get_board_labels` | All labels on the board |
 | `get_recent_activity` | Recent board activity |
 | `manage_checklist` | Create checklists, add/toggle items |
